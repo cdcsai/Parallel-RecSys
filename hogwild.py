@@ -25,13 +25,11 @@ class HogWild(threading.Thread):
 
 def process_data(threadName, q):
     while not exitFlag:
-        queueLock.acquire()
         if not workQueue.empty():
             data = q.get()
-            queueLock.release()
             print("%s processing %s" % (threadName, data))
         else:
-            queueLock.release()
+
             time.sleep(1)
 
 
@@ -45,7 +43,6 @@ if __name__ == "__main__":
    nameList = list()
    for task in range(100):
       nameList.append(["{}".format(task)])
-   queueLock = threading.Lock()
    workQueue = queue.Queue(100)
    threads = []
    threadID = 1
@@ -58,10 +55,9 @@ if __name__ == "__main__":
       threadID += 1
 
    # Fill the queue
-   queueLock.acquire()
    for word in nameList:
       workQueue.put(word)
-   queueLock.release()
+
 
    # Wait for queue to empty
    while not workQueue.empty():
