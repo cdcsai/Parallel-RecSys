@@ -36,6 +36,9 @@ def process_data(threadName, q):
 def sgd_partial_update(x, lbda):
    pass
 
+def svm(x):
+    pass
+
 
 if __name__ == "__main__":
 
