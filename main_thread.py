@@ -1,40 +1,3 @@
-import queue
-import threading
-import time
-
-exitFlag = 0
-
-
-class HogWild(threading.Thread):
-
-    def __init__(self, threadID, name, q):
-        threading.Thread.__init__(self)
-        self.threadID = threadID
-        self.name = name
-        self.q = q
-
-    def run(self):
-        print("Starting " + self.name)
-        process_data(self.name, self.q)
-        print("Exiting " + self.name)
-
-
-def process_data(threadName, q, queueLock, workQueue):
-    while not exitFlag:
-        queueLock.acquire()
-        if not workQueue.empty():
-            data = q.get()
-            queueLock.release()
-            print("%s processing %s" % (threadName, data))
-        else:
-            queueLock.release()
-            time.sleep(1)
-
-
-def sgd_partial_update(x, lbda):
-    pass
-
-
 if __name__ == "__main__":
 
     threadList = ["Thread-" + str(i) for i in range(3)]
@@ -72,5 +35,3 @@ if __name__ == "__main__":
     for t in threads:
         t.join()
     print("Exiting Main Thread")
-
-

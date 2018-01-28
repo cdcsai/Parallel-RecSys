@@ -4,7 +4,7 @@ from parameters import parameters
 
 def main():
     recommender = RecommenderSystem(parameters)
-    recommender.run()
+    recommender.run(type="sgd")
 
 
 if __name__ == '__main__':
