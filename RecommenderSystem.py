@@ -1,6 +1,9 @@
 import numpy as np
 import random
 from tqdm import tqdm
+from multiprocessing.pool import Pool
+from multiprocessing.sharedctypes import Array
+from ctypes import c_double
 from math import sqrt
 
 
@@ -8,6 +11,7 @@ class RecommenderSystem():
     def __init__(self, parameters):
         self.nb_users = parameters["nb_users"]
         self.nb_movies = parameters["nb_movies"]
+        self.nb_workers = parameters["nb_workers"]
         self.R = self.initialize_r()
         self.df_size = parameters["df_size"]
         self.coord = np.empty((self.df_size, 2))
@@ -54,46 +58,65 @@ class RecommenderSystem():
 
     def derivative(self, i, j, is_row, U, V, nonzero_len):
         assert self.R[i, j] is not np.nan
-        if is_row :
+        if is_row:
             return (np.dot(U[i, :], V[:, j]) - self.R[i, j]) * V[:, j] + self.regularization / nonzero_len * U[i, :]
-        else :
+        else:
             return (np.dot(U[i, :], V[:, j]) - self.R[i, j]) * U[i, :] + self.regularization / nonzero_len * V[:, j]
 
     def non_zero_idx(self, idx, is_row):
-        if is_row :
-            return np.asarray(np.nonzero(np.isnan(self.R[idx, :]) == False)).flatten()
-        else :
-            return np.asarray(np.nonzero(np.isnan(self.R[:, idx]) == False)).flatten()
+        if is_row:
+            return np.asarray(np.nonzero(np.isnan(self.R[idx, :])==False)).flatten()
+        else:
+            return np.asarray(np.nonzero(np.isnan(self.R[:, idx])==False)).flatten()
 
-    def learn_sgd(self):
-
-        U = np.random.rand(self.nb_users, self.k) * .1
-        V = np.random.rand(self.k, self.nb_movies) * .1
-
-        for i in range(0, self.nb_users):
-            U[i, :] = 1
+    def sgd_U_V(self, idxs):
+        # V = np.random.rand(self.k, self.nb_movies) * .1
+        V = Array(c_double, np.random.rand(self.k, self.nb_movies) * .1, lock=False)
+        # U = np.random.rand(self.nb_users, self.k) * .1
+        U = Array(c_double, np.random.rand(self.nb_users, self.k) * .1, lock=False)
         for i in range(0, self.nb_movies):
             V[0, i] = 1
-
-        for _ in tqdm(range(self.max_iter)):
-            # Gradient descent over U
-            for i in range(self.nb_users):
-                non_zero_idx = self.non_zero_idx(i, is_row=True)
-                gradients = [self.derivative(i, j, is_row=False, U=U, V=V, nonzero_len=len(non_zero_idx))
-                            for j in non_zero_idx]
-                for s in range(len(non_zero_idx)):
-                    idx = non_zero_idx[s]
-                    V[:, idx] -= self.gradient_step * gradients[s]
-
+        for i in range(0, self.nb_users):
+            U[i, :] = 1
             # Gradient descent over V
-            for j in range(self.nb_movies) :
+        for _ in tqdm(range(self.max_iter)):
+
+            idxs = np.random.choice(self.nb_movies, 4, replace=False)
+            for j in idxs:
                 non_zero_idx = self.non_zero_idx(j, is_row=False)
                 gradients = [self.derivative(i, j, is_row=True, U=U, V=V, nonzero_len=len(non_zero_idx))
                              for i in non_zero_idx]
                 for s in range(len(non_zero_idx)):
                     idx = non_zero_idx[s]
                     U[idx, :] -= self.gradient_step * gradients[s]
-        return U, V
+
+
+
+        for _ in tqdm(range(self.max_iter)):
+            # Gradient descent over U
+            idxs = np.random.choice(self.nb_users, 4, replace=False)
+            for i in idxs:
+                non_zero_idx = self.non_zero_idx(i, is_row=True)
+                gradients = [self.derivative(i, j, is_row=False, U=U, V=V, nonzero_len=len(non_zero_idx))
+                             for j in non_zero_idx]
+                for s in range(len(non_zero_idx)):
+                    idx = non_zero_idx[s]
+                    U[:, idx] -= self.gradient_step * gradients[s]
+        return V, U
+
+    def learn_sgd_hogwild(self):
+        p = Pool(self.nb_workers)
+        results = p.apply_async(self.sgd_U_V, idxs)
+
+        # batch_size = 1
+        # examples = [None] * int(X.shape[0] / float(batch_size))
+        # for k in range(int(X.shape[0] / float(batch_size))):
+        #     Xx = X[k * batch_size: (k + 1) * batch_size, :].reshape((batch_size, X.shape[1]))
+        #     yy = y[k * batch_size: (k + 1) * batch_size].reshape((batch_size, 1))
+        #     examples[k] = (Xx, yy)
+
+
+
 
     def learn(self):
         U = np.random.rand(self.k, self.nb_users)
@@ -142,9 +165,9 @@ class RecommenderSystem():
         self.R = self.initialize_r()
         self.load_file()
         test_set = self.sample_data()
-        if type == "efficient" :
+        if type == "efficient":
             U, V = self.learn()
-        if type == "sgd" :
+        if type == "sgd":
             U, V = self.learn_sgd()
         rmse = self.evaluate(test_set, U, V)
         print("The RMSE is " + str(rmse))
