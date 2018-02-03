@@ -6,12 +6,12 @@ import numpy as np
 import logging
 import time
 
-# logging.basicConfig(level=logging.DEBUG,
-#                     format='%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s',
-#                     datefmt='%a, %d %b %Y %H:%M:%S',
-#                     filename='./src/log/recsys.log',
-#                     filemode='w',
-# )
+logging.basicConfig(level=logging.DEBUG,
+                    format='%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s',
+                    datefmt='%a, %d %b %Y %H:%M:%S',
+                    filename='./log/recsys.log',
+                    filemode='w',
+)
 
 
 class TrainRecommender(RecommenderSystem) :
@@ -29,10 +29,12 @@ class TrainRecommender(RecommenderSystem) :
         self.processes = train_param["processes"]
 
         self.test_perf = []
+        self.observations = []
         self.runtime = 0
 
     def initialize(self):
         self.test_perf = []
+        self.observations = []
         self.runtime = 0
 
     def check(self):
@@ -118,12 +120,13 @@ class TrainRecommender(RecommenderSystem) :
         self.U, self.V = initialize_uv(u_rows=self.nb_users, u_cols=self.k,
                                        v_cols=self.nb_movies)
 
-        for it in tqdm(range(self.max_iter)):
+        for it in tqdm(range(1, self.max_iter + 1)):
             self.train_iter()
 
             if it % self.eval_it == 0:
                 start_eval = time.time()
                 self.test_perf.append(self.evaluate())
+                self.observations.append(it * self.processes)
                 end_eval = time.time()
                 eval_time += end_eval - start_eval
 
@@ -147,4 +150,5 @@ class TrainRecommender(RecommenderSystem) :
             "eval_it": self.eval_it,
             "test_perf": self.test_perf,
             "runtime": self.runtime,
+            "observations" : self.observations
         }

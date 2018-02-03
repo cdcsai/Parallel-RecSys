@@ -22,18 +22,19 @@ class Experiment:
         self.train_param["batch_size"] = None
         self.train_param["processes"] = processes
 
-    def convergence_processes(self, processes):
+    def convergence_processes(self, processes, same_obs=False):
         logs = []
+        base_eval_it = self.train_param["eval_it"]
+        base_max_iter = self.train_param["max_iter"]
 
         for process in processes:
+            if same_obs :
+                self.train_param["eval_it"] = int(base_eval_it / process)
+                self.train_param["max_iter"] = int(base_max_iter / process)
 
             self.processes_set(process)
             recsys = TrainRecommender(data_param=self.data_param, train_param=self.train_param)
             recsys.run()
-
             print(recsys)
             logs.append((self.train_param, recsys.get_dict()))
-
         write_to_json(logs)
-
-
