@@ -1,5 +1,5 @@
-from parameters import train_param, data_param
 from TrainRecommender import TrainRecommender
+from recsys.logs import write_to_json
 
 
 class Experiment:
@@ -23,18 +23,17 @@ class Experiment:
         self.train_param["processes"] = processes
 
     def convergence_processes(self, processes):
-        run_times = []
-        evals = []
-        params = []
+        logs = []
 
         for process in processes:
 
             self.processes_set(process)
-            recsys = TrainRecommender(data_param, train_param)
+            recsys = TrainRecommender(data_param=self.data_param, train_param=self.train_param)
             recsys.run()
 
-            run_times.append(recsys.runtime)
-            evals.append(recsys.test_perf)
-            params.append([self.data_param, self.train_param])
+            print(recsys)
+            logs.append((self.train_param, recsys.get_dict()))
 
-        print("Done")
+        write_to_json(logs)
+
+

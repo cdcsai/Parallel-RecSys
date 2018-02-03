@@ -1,4 +1,4 @@
-from RecommenderSystem import RecommenderSystem
+from recsys.RecommenderSystem import RecommenderSystem
 from recsys.parallel import initialize_uv, parallel
 
 from tqdm import tqdm
@@ -141,3 +141,10 @@ class TrainRecommender(RecommenderSystem) :
         if self.batch_size is not None:
             logging.info('Training with mini-batch SGD, with a batch size of %d', self.batch_size)
             self.learn_sgd(user_batch=self.batch_size, movie_batch=self.batch_size)
+
+    def get_dict(self):
+        return {
+            "eval_it": self.eval_it,
+            "test_perf": self.test_perf,
+            "runtime": self.runtime,
+        }
