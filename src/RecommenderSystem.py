@@ -7,6 +7,7 @@ class RecommenderSystem():
     def __init__(self, parameters):
         self.nb_users = parameters["nb_users"]
         self.nb_movies = parameters["nb_movies"]
+        self.data_dir = parameters["data_dir"]
 
         self.df_size = parameters["df_size"]
         self.coord = np.empty((self.df_size, 2))
@@ -26,7 +27,7 @@ class RecommenderSystem():
 
     def load_file(self):
         coord_index = 0
-        with open("ratings1M.dat") as file:
+        with open(self.data_dir) as file:
             for line in file:
                 info = line.split("::", 3)
                 user = int(info[0]) - 1
@@ -70,6 +71,7 @@ class RecommenderSystem():
         self.R = self.initialize_r()
         self.load_file()
         self.sample_data()
-        self.learn()
+        self.train()
         rmse = self.evaluate()
         print("The test RMSE is " + str(rmse))
+        return rmse

@@ -3,6 +3,8 @@ tche__/
 *.py[cod]
 *$py.class
 
+# Local files
+tex/*
 src/tests.py
 
 # C extensions
