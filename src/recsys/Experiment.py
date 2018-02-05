@@ -33,6 +33,7 @@ class Experiment:
                 self.train_param["max_iter"] = int(base_max_iter / process)
 
             self.processes_set(process)
+            print("processes %d", self.train_param["processes"])
             recsys = TrainRecommender(data_param=self.data_param, train_param=self.train_param)
             recsys.run()
             print(recsys)

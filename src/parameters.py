@@ -8,11 +8,12 @@ data_param = {
 
 train_param = {
     "regularization": 0.01,
-    "max_iter": 300,
+    "max_iter": 3000,
     "k": 5,
     "learning_rate": 0.01,
-    "eval_it" : 100,
+    "eval_it": 100,
     "batch_size": None,
     "is_stochastic": None,
-    "processes": 4
+    "processes": 4,
+    "with_lock": True
 }

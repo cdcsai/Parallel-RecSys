@@ -1,20 +1,21 @@
-from recsys.RecommenderSystem import RecommenderSystem
-from recsys.parallel import initialize_uv, parallel
-
-from tqdm import tqdm
-import numpy as np
 import logging
 import time
+
+import numpy as np
+from tqdm import tqdm
+
+from recsys.RecommenderSystem import RecommenderSystem
+from recsys.parallel import initialize_uv, parallel, count_conflicts, flatten
 
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s',
                     datefmt='%a, %d %b %Y %H:%M:%S',
                     filename='./log/recsys.log',
                     filemode='w',
-)
+                    )
 
 
-class TrainRecommender(RecommenderSystem) :
+class TrainRecommender(RecommenderSystem):
     def __init__(self, data_param, train_param):
         super().__init__(data_param)
         self.regularization = train_param["regularization"]
@@ -27,23 +28,29 @@ class TrainRecommender(RecommenderSystem) :
         self.batch_size = train_param["batch_size"]
         self.is_stochastic = train_param["is_stochastic"]
         self.processes = train_param["processes"]
+        self.with_lock = train_param["with_lock"]
 
         self.test_perf = []
         self.observations = []
         self.runtime = 0
+        self.conflicts = []
+        self.ratings_counts = []
+        self.log_conflict = False
 
     def initialize(self):
         self.test_perf = []
         self.observations = []
         self.runtime = 0
+        self.conflicts = []
+        self.log_conflict = False
 
     def check(self):
         nb_none = 0
-        if self.processes is None :
+        if self.processes is None:
             nb_none += 1
-        if self.is_stochastic is None :
+        if self.is_stochastic is None:
             nb_none += 1
-        if self.batch_size is None :
+        if self.batch_size is None:
             nb_none += 1
 
         try:
@@ -72,14 +79,14 @@ class TrainRecommender(RecommenderSystem) :
         nonzero_len = len(non_zero_idx)
 
         return [self.derivative(i, index, is_u=is_u, nonzero_len=nonzero_len)
-                     for i in non_zero_idx]
+                for i in non_zero_idx]
 
     def gradient_step(self, is_u, d_index):
         non_zero_idx = self.non_zero_idx(d_index, is_u=is_u)
         nonzero_len = len(non_zero_idx)
         gradients = self.compute_gradients(is_u, d_index)
 
-        if is_u :
+        if is_u:
             for s in range(nonzero_len):
                 idx = non_zero_idx[s]
                 self.U[idx, :] -= self.learning_rate * gradients[s]
@@ -92,7 +99,7 @@ class TrainRecommender(RecommenderSystem) :
         """ Learn with Stochastic Graident Descent"""
         # Gradient descent over U
         idxs = np.random.choice(self.nb_users, user_batch, replace=False)
-        for idx in idxs :
+        for idx in idxs:
             self.gradient_step(is_u=False, d_index=idx)
 
         # Gradient descent over V
@@ -103,11 +110,15 @@ class TrainRecommender(RecommenderSystem) :
     def learn_parallel(self):
         # Gradient descent over U
         idxs = np.random.choice(self.nb_users, self.processes, replace=False)
+        if self.log_conflict:
+            self.add_conflicts(idxs, is_u=False)
         args_list = [(False, idx) for idx in idxs]
-        parallel(fun=self.gradient_step, args_list=args_list, n_processes=self.processes)
+        parallel(fun=self.gradient_step, args_list=args_list, n_processes=self.processes, with_lock=self.with_lock)
 
         # Gradient descent over V
         idxs = np.random.choice(self.nb_movies, self.processes, replace=False)
+        if self.log_conflict:
+            self.add_conflicts(idxs, is_u=True)
         args_list = [(True, idx) for idx in idxs]
         parallel(fun=self.gradient_step, args_list=args_list, n_processes=self.processes)
 
@@ -118,17 +129,24 @@ class TrainRecommender(RecommenderSystem) :
 
         start = time.time()
         self.U, self.V = initialize_uv(u_rows=self.nb_users, u_cols=self.k,
-                                       v_cols=self.nb_movies)
+                                       v_cols=self.nb_movies, with_lock=self.with_lock)
 
         for it in tqdm(range(1, self.max_iter + 1)):
+            self.log_conflict = False
+            if it % self.eval_it == 0:
+                self.log_conflict = True
+
             self.train_iter()
 
             if it % self.eval_it == 0:
                 start_eval = time.time()
                 self.test_perf.append(self.evaluate())
-                self.observations.append(it * self.processes)
+                self.observations.append([2 * it * self.processes, (2 * it + 1) * self.processes])
                 end_eval = time.time()
                 eval_time += end_eval - start_eval
+
+        self.conflicts = np.cumsum(self.conflicts).tolist()
+        self.ratings_counts = np.cumsum(self.ratings_counts).tolist()
 
         end = time.time()
         self.runtime = end - start - eval_time
@@ -150,5 +168,13 @@ class TrainRecommender(RecommenderSystem) :
             "eval_it": self.eval_it,
             "test_perf": self.test_perf,
             "runtime": self.runtime,
-            "observations" : self.observations
+            "observations": self.observations,
+            "conflicts": self.conflicts,
+            "ratings_counts" : self.ratings_counts
         }
+
+    def add_conflicts(self, idxs, is_u):
+        full_idxs = [self.non_zero_idx(idx, is_u) for idx in idxs]
+        conflicts_cnt = count_conflicts(full_idxs)
+        self.conflicts.append(conflicts_cnt)
+        self.ratings_counts.append(len(flatten(full_idxs)))
