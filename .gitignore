@@ -9,7 +9,6 @@ src/tests.py
 
 # C extensions
 *.so
-*.dat
 
 # Distribution / packaging
 .Python
